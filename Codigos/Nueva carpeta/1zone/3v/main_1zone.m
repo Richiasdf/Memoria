@@ -6,7 +6,7 @@ mdl2 = 'hvac_1zone_v3';
 open_system(mdl2)
 
 %% Define model parameters
-load('values.mat')
+load('values1z.mat')
 
 
 %% Reinforcement learning
