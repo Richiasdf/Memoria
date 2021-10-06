@@ -70,7 +70,7 @@ criticNetwork = addLayers(criticNetwork,commonPath);
 criticNetwork = connectLayers(criticNetwork,'CriticStateFC2','add/in1');
 criticNetwork = connectLayers(criticNetwork,'CriticActionFC1','add/in2');
 
-criticOpts = rlRepresentationOptions('LearnRate',1e-03,'GradientThreshold',1);
+criticOpts = rlRepresentationOptions('LearnRate',1e-03,'GradientThreshold',1,'UseDevice','gpu');
 critic = rlQValueRepresentation(criticNetwork,obsInfo,actInfo,'Observation',{'State'},'Action',{'Action'},criticOpts);
 
 %Red neuronal Actor
@@ -81,7 +81,7 @@ actorNetwork = [
     fullyConnectedLayer(numActions,'Name','Action')
     ];
 
-actorOptions = rlRepresentationOptions('LearnRate',1e-03,'GradientThreshold',1);
+actorOptions = rlRepresentationOptions('LearnRate',1e-03,'GradientThreshold',1, 'UseDevice','gpu');
 
 
 %Ver mas en detalle
@@ -130,7 +130,7 @@ StopReward = -7;
 trainOpts = rlTrainingOptions(...
     'MaxEpisodes',maxepisodes, ...
     'MaxStepsPerEpisode',maxsteps, ...
-    'UseParallel',true, ...
+    'UseParallel',false, ...
     'ScoreAveragingWindowLength',25, ...
     'Plots','training-progress',...
     'StopTrainingCriteria','AverageReward',...
