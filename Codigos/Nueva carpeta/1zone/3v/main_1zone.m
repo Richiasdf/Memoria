@@ -32,15 +32,21 @@ env = rlSimulinkEnv(mdl2,'hvac_1zone_v3/RL Agent',...
 %Función para reiniciar el sistema
 %Esta función es útil cuando se quiere usar distintas condiciones iniciales
 %en cada inicio de un episodio.
-%env.ResetFcn = @(in) localResetFcn(in);
+ci = [36;36];
+env.ResetFcn = @(in) localResetFcn(in);
 
 %Range of temperature wanted
 min_temp = 22;
 max_temp = 25;
 
 %Sample Time & Simulation Time
+
+
+
+Ts = 60; %1 min
 Ts2 = 600; %10 min
 Tf = 21600; % 6 horas
+
 
 %Set random seed.
 rng(0)
@@ -52,12 +58,12 @@ rng(0)
 %14 6 6
 statePath = [
     featureInputLayer(numObservations,'Normalization','none','Name','State')
-    fullyConnectedLayer(40,'Name','CriticStateFC1')
+    fullyConnectedLayer(80,'Name','CriticStateFC1')
     tanhLayer('Name','CriticTanh1')
-    fullyConnectedLayer(25,'Name','CriticStateFC2')];
+    fullyConnectedLayer(64,'Name','CriticStateFC2')];
 actionPath = [
     featureInputLayer(numActions,'Normalization','none','Name','Action')
-    fullyConnectedLayer(25,'Name','CriticActionFC1')];
+    fullyConnectedLayer(64,'Name','CriticActionFC1')];
 commonPath = [
     additionLayer(2,'Name','add')
     tanhLayer('Name','CriticTanh')
@@ -70,18 +76,18 @@ criticNetwork = addLayers(criticNetwork,commonPath);
 criticNetwork = connectLayers(criticNetwork,'CriticStateFC2','add/in1');
 criticNetwork = connectLayers(criticNetwork,'CriticActionFC1','add/in2');
 
-criticOpts = rlRepresentationOptions('LearnRate',1e-03,'GradientThreshold',1,'UseDevice','gpu');
+criticOpts = rlRepresentationOptions('LearnRate',1e-03,'GradientThreshold',1);
 critic = rlQValueRepresentation(criticNetwork,obsInfo,actInfo,'Observation',{'State'},'Action',{'Action'},criticOpts);
 
 %Red neuronal Actor
 actorNetwork = [
     featureInputLayer(numObservations,'Normalization','none','Name','State')
-    fullyConnectedLayer(9, 'Name','actorFC2')
+    fullyConnectedLayer(32, 'Name','actorFC2')
     tanhLayer('Name','ActorCommonRelu2')
     fullyConnectedLayer(numActions,'Name','Action')
     ];
 
-actorOptions = rlRepresentationOptions('LearnRate',1e-03,'GradientThreshold',1, 'UseDevice','gpu');
+actorOptions = rlRepresentationOptions('LearnRate',1e-03,'GradientThreshold',1);
 
 
 %Ver mas en detalle
@@ -100,7 +106,7 @@ agentOpts = rlDDPGAgentOptions(...
 %Opciones del ruido aplicado a las acciones tomadas, si se tiene más de una
 %acción, y estas no se encuentran en rangos similares, se recomienda
 %utilizar un vector en vez de un escalar.
-agentOpts.NoiseOptions.StandardDeviation = [0.35; 0.4; 0.2];
+agentOpts.NoiseOptions.StandardDeviation = [3.35; 3.4; 3.2];
 agentOpts.NoiseOptions.StandardDeviationDecayRate = [1e-4; 5e-4 ; 1e-3];
 % Averiguar***
 agentOpts.NoiseOptions.MeanAttractionConstant = 0.15/Ts2;
@@ -109,13 +115,13 @@ agentOpts.NoiseOptions.StandardDeviationMin = [0.015; 0.01; 0.01];
 
 % Train the agent
 % Set to true, to resume training from a saved agent
-resumeTraining = false;
+resumeTraining = true;
 % Set ResetExperienceBufferBeforeTraining to false to keep experience from the previous session
 agentOpts.ResetExperienceBufferBeforeTraining = ~(resumeTraining);
 
 if resumeTraining
-    agentOpts.NoiseOptions.StandardDeviation = [0.25; 0.2; 0.15];
-    load('train_agent2.mat');
+    agentOpts.NoiseOptions.StandardDeviation = [2.25; 1.2; 1.15];
+    load('train_agent.mat');
 else
     % Create a fresh new agent
     agent = rlDDPGAgent(actor, critic, agentOpts);
@@ -123,14 +129,14 @@ end
 
 
 
-maxepisodes = 16000;
+maxepisodes = 25000;
 maxsteps = ceil(Tf/Ts2);
 StopReward = -7;
 %    'Verbose',false, ...
 trainOpts = rlTrainingOptions(...
     'MaxEpisodes',maxepisodes, ...
     'MaxStepsPerEpisode',maxsteps, ...
-    'UseParallel',false, ...
+    'UseParallel',true, ...
     'ScoreAveragingWindowLength',25, ...
     'Plots','training-progress',...
     'StopTrainingCriteria','AverageReward',...
@@ -148,5 +154,5 @@ simOpts = rlSimulationOptions('MaxSteps',maxsteps,'StopOnError','on');
 sim(env,agent,simOpts);
 
 %Save the train network
-save('train_agent2.mat','agent','simOpts')
+save('train_agent.mat','agent','simOpts')
 
