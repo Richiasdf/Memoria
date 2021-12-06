@@ -6,17 +6,17 @@ save_agent = true;
 use_parallel = true;
 
 %device for critic & actor
-device = "cpu";
+device = "gpu";
 %Save & Load options
-save_agent_name = "train_agent_td3_tch4.mat";
+save_agent_name = "train_agent_td3.mat";
 load_agent_name = "train_agent_td3_tch2.mat";
 %folder where to load/save agents and models.
-subcarpeta = "4v/";
+subcarpeta = "1v/";
 %
-numObservations = 11;
-numActions = 4;
-limit_act_low = [0; -30 ; 0; 0];
-limit_act_h = [5; 0; 8 ;0.9];
+numObservations = 4;
+numActions = 1;
+limit_act_low = 0;
+limit_act_h = 5;
 obs_low = -40;
 obs_high = 1e7;
 scale = limit_act_low + limit_act_h;
@@ -24,28 +24,28 @@ scale = limit_act_low + limit_act_h;
 low = 22; %temperatura minima
 high = 25; % temperatura máxima
 CO2_max = 1200*1e-6;
-beta = 0.05;% Peso de la energía en el reward
+beta = 0.15;% Peso de la energía en el reward
 %Sample Time & Simulation Time
 Ts = 60*1; %2 min - HVAC System sample Time
 Ts2 = 60*10; %n min - Neural network Sample time
-Tf = 3600*48; % n horas  - Simulation Time
-maxepisodes = 30000;% max number of episodes to stop learning
-StopReward = -60; %Episode reward to stop learning
+Tf = 3600*6; % n horas  - Simulation Time
+maxepisodes = 4000;% max number of episodes to stop learning
+StopReward = 20; %Episode reward to stop learning
 maxsteps = ceil(Tf/Ts2); % Cantidad de pasos en un episodio
 %RL Layers
 criticlayers = [2,1];
-criticNeurons = [400, 300, 300];
+criticNeurons = [128, 128, 128];
 actorlayers = 2;
-actorNeurons = [400, 300];
+actorNeurons = [128, 128];
 
 
 
 %% Load and open the system in simulink
-mdl = subcarpeta + "hvac_1zone_TCH";
+mdl = subcarpeta + "hvac_1zone_v3";
 %open_system(mdl)
 
 %% Define model parameters
-load('values1z_tch.mat');
+load('values1z.mat');
 params = params1;
 
 
@@ -58,7 +58,7 @@ params = params1;
 %Esta función es útil cuando se quiere usar distintas condiciones iniciales
 %en cada inicio de un episodio.
 %ci = [28 , 34 , 1500];
-env.ResetFcn = @(in) localResetFcn3(in);
+env.ResetFcn = @(in) localResetFcn(in);
 %Set random seed.
 rng(0)
 %Opciones del agente
@@ -79,9 +79,9 @@ agentOpts = rlTD3AgentOptions(...
 
 agentOpts.ExplorationModel = rl.option.OrnsteinUhlenbeckActionNoise;
 agentOpts.ExplorationModel.MeanAttractionConstant = 0.2/Ts2;
-agentOpts.ExplorationModel.StandardDeviation = [0.5 ;0.1*sqrt(Ts2) ; 0.45 ; 0.1]/sqrt(Ts2);
-agentOpts.ExplorationModel.StandardDeviationDecayRate = [4e-7; 5e-7; 3e-7 ;1e-7];
-agentOpts.ExplorationModel.StandardDeviationMin = [0.015; 0.01; 0.03 ;0.05]/sqrt(Ts2);
+agentOpts.ExplorationModel.StandardDeviation = 0.5/sqrt(Ts2); %;0.2*sqrt(Ts2)]/sqrt(Ts2);
+agentOpts.ExplorationModel.StandardDeviationDecayRate = 5e-4;% 5e-5];
+agentOpts.ExplorationModel.StandardDeviationMin = 0.015/sqrt(Ts2);% 0.001]/sqrt(Ts2);
 
 
 % Train the agent
@@ -97,14 +97,14 @@ if resumeTraining
 
 else
     %Red neuronal Critico
-    criticOpts = rlRepresentationOptions('LearnRate',1e-03,'GradientThreshold',1, 'UseDevice', device);
+    criticOpts = rlRepresentationOptions('LearnRate',1e-03,'GradientThreshold',.5, 'UseDevice', device);
     criticNetwork = MakeCritic(numObservations,numActions,criticlayers,criticNeurons);
     critic = rlQValueRepresentation(criticNetwork,obsInfo,actInfo,'Observation',{'State'},'Action',{'Action'},criticOpts);
     criticNetwork2 = MakeCritic(numObservations,numActions,criticlayers,criticNeurons);
     critic2 = rlQValueRepresentation(criticNetwork2,obsInfo,actInfo,'Observation',{'State'},'Action',{'Action'},criticOpts);
     %Red neuronal Actor
     actorNetwork = MakeActor(numObservations,numActions, actorlayers , actorNeurons, scale);
-    actorOptions = rlRepresentationOptions('LearnRate',2e-03,'GradientThreshold',1, 'UseDevice', device);
+    actorOptions = rlRepresentationOptions('LearnRate',2e-03,'GradientThreshold',.5, 'UseDevice', device);
     actor = rlDeterministicActorRepresentation(actorNetwork,obsInfo,actInfo,'Observation',{'State'},'Action',{'Action'},actorOptions);
     % Create a fresh new agent
     %createNetworks
