@@ -34,9 +34,13 @@ COs = delta*T(3) + (1-delta)*CO2amb;
 dT(1)=Tr+(ST*ms*cp*((Ts)-T(1))+ ST*(T(2)-T(1))/R+...
     ST*(Toa-T(1))/Roa+ST*Pd)/C1;
 dT(2)=T(2)+ST*(T(1)-T(2))/(R*C2);
-dT(3) = T(3) + ST/(Vol*rhoair)* (ms*(COs - T(3)) + CO2gen/(Vol));%+ aux;
-if dT(3) <= 0 && T(3) <= 0
-    dT(3) = 0;
+CO2dif = T(3) + ST/(Vol*rhoair)*ms*(COs - T(3));
+%+ aux;
+
+if CO2dif < COs
+    dT(3) = COs + ((ST*CO2gen)/(Vol*Vol*rhoair));
+else
+    dT(3) = T(3) + ST/(Vol*rhoair)* (ms*(COs - T(3)) + CO2gen/(Vol));
 end
 
 

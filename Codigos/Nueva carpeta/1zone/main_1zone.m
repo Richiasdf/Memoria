@@ -6,7 +6,7 @@ save_agent = true;
 use_parallel = true;
 
 %device for critic & actor
-device = "gpu";
+device = "cpu";
 %Save & Load options
 save_agent_name = "train_agent_tch2.mat";
 load_agent_name = "train_agent2.mat";
@@ -15,8 +15,8 @@ subcarpeta = "4v/";
 %
 numObservations = 11;
 numActions = 4;
-limit_act_low = [0; -30; 0; 0];
-limit_act_h = [5; 0; 8; .9];
+limit_act_low = [0; -30 ; 0;  0];
+limit_act_h = [5; 0; 8; 0.9];
 obs_low = -40;
 obs_high = 1e7;
 scale = limit_act_low + limit_act_h;
@@ -24,30 +24,34 @@ scale = limit_act_low + limit_act_h;
 low = 22; %temperatura minima
 high = 25; % temperatura máxima
 CO2_max = 1200*1e-6;
-beta = 0.05;% Peso de la energía en el reward
+beta = 0.1;% Peso de la energía en el reward
 %Sample Time & Simulation Time
 Ts = 60*1; %2 min - HVAC System sample Time
 Ts2 = 60*10; %n min - Neural network Sample time
 Tf = 3600*48; % n horas  - Simulation Time
 maxepisodes = 30000;% max number of episodes to stop learning
-StopReward = -40; %Episode reward to stop learning
+StopReward = -100; %Episode reward to stop learning
 maxsteps = ceil(Tf/Ts2); % Cantidad de pasos en un episodio
 %RL Layers
 criticlayers = [2,1];
-criticNeurons = [128, 128, 128];
+criticNeurons = [400, 300, 300];
 actorlayers = 2;
-actorNeurons = [128, 128];
+actorNeurons = [400, 300];
 
 
 
 %% Load and open the system in simulink
+%mdl = subcarpeta + "hvac_1zone_v3";
 mdl = subcarpeta + "hvac_1zone_TCH";
 %open_system(mdl)
 
 %% Define model parameters
-load('values1z_tch.mat');
+%load('values1z.mat'); % Uncomennt this por T params
+%load('values1z_co2.mat'); % Uncomment this for TC params
+load('values1z_tch.mat'); % uncomment this for TCH (temp, co2, hum) params
 params = params1;
-Hs_struct.signals.values = Hs_struct.signals.values*0.6;
+Hs_struct.signals.values = Hs_struct.signals.values/2;
+
 
 %% Reinforcement learning
 %Se definen las observaciones, rlNumericSpec es para observaciones de
@@ -74,10 +78,10 @@ agentOpts = rlDDPGAgentOptions(...
 %Opciones del ruido aplicado a las acciones tomadas, si se tiene más de una
 %acción, y estas no se encuentran en rangos similares, se recomienda
 %utilizar un vector en vez de un escalar.
-agentOpts.NoiseOptions.StandardDeviation = [0.5 ;0.1*sqrt(Ts2) ; 0.45 ; 0.1]/sqrt(Ts2); %;0.3*sqrt(Ts2) ; 0.45 ; 0.1];
-agentOpts.NoiseOptions.StandardDeviationDecayRate = 1e-7;% 5e-7; 3e-7 ;1e-7];
+agentOpts.NoiseOptions.StandardDeviation = [0.5 ; 0.1*sqrt(Ts2);0.6 ; 0.1]/sqrt(Ts2); %;0.3*sqrt(Ts2) ; 0.45 ; 0.1];
+agentOpts.NoiseOptions.StandardDeviationDecayRate = 3e-6;% 5e-7; 3e-7 ;1e-7];
 agentOpts.NoiseOptions.MeanAttractionConstant = 0.2/Ts2;
-agentOpts.NoiseOptions.StandardDeviationMin = [0.015; 0.01; 0.03 ;0.05]/sqrt(Ts2);% 0.1; 0.03 ;0.05];
+agentOpts.NoiseOptions.StandardDeviationMin = [0.02; 0.2 ; 0.03 ;0.02]/sqrt(Ts2);% 0.1; 0.03 ;0.05];
 
 
 % Set ResetExperienceBufferBeforeTraining to false to keep experience from the previous session
@@ -86,7 +90,7 @@ agentOpts.ResetExperienceBufferBeforeTraining = ~(resumeTraining);
 if resumeTraining
     load(subcarpeta+load_agent_name);
     agent.AgentOptions.NoiseOptions.StandardDeviationMin = [0.01; 0.05; 0.05; 0.01 ]/sqrt(Ts2);
-    agent.AgentOptions.NoiseOptions.StandardDeviation = [0.05; 0.5; 0.3 ; 0.05]/sqrt(Ts2);
+    agent.AgentOptions.NoiseOptions.StandardDeviation = [0.3; 0.5; 0.4 ; 0.05]/sqrt(Ts2);
     agent.AgentOptions.NoiseOptions.StandardDeviationDecayRate = 1e-8;
     
 else
@@ -96,7 +100,7 @@ else
     critic = rlQValueRepresentation(criticNetwork,obsInfo,actInfo,'Observation',{'State'},'Action',{'Action'},criticOpts);
     %Red neuronal Actor
     actorNetwork = MakeActor(numObservations,numActions, actorlayers , actorNeurons,scale);
-    actorOptions = rlRepresentationOptions('LearnRate',1e-03,'GradientThreshold',.5, 'UseDevice', device);
+    actorOptions = rlRepresentationOptions('LearnRate',3e-03,'GradientThreshold',.5, 'UseDevice', device);
     actor = rlDeterministicActorRepresentation(actorNetwork,obsInfo,actInfo,'Observation',{'State'},'Action',{'Action'},actorOptions);
     % Create a fresh new agent
     %createNetworks

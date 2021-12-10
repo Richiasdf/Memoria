@@ -169,12 +169,9 @@ CO2w_struct.signals.values=yy';
 
 Npeoplemax=2;
 %% Humidity ... basado en 90% RH & 25 C=>17.68/10^3 kg/kg & 65% RH & 32 C=>19.19/10^3 kg/kg
-% sig_H=0.1/10^3;%2/10^3
-% sig_wH=0.001/10^3;%0.01/10^3
-sig_H=0;
-sig_wH=0;
-ar=0.8;%0.55
-br=0.4;%0.3
+sig_H=0.2/10^3;%2/10^3
+sig_wH=0.001/10^3;%0.01/10^3
+
 %Ambient Humidity
 npattern=6;
 hum_pattern=[17.5,17.5,18,21,21,19]/10^3;
@@ -183,7 +180,7 @@ time_pattern=[0,4,8,12,16,20]*3600;
 
 
 Hs=repmat(hum_pattern,1,simulation_days);
-Hs_w=Hs+sig_H*randn(1,npattern*simulation_days);
+Hs_w=Hs+sig_wH*randn(1,npattern*simulation_days);
 times=[0:npattern*simulation_days-1]*3600*24/npattern;
 
 sample_times=[0:3600/sampling_time*24*(simulation_days-1)]*sampling_time; %notice that due to spline interpolation the last 24/npattern hours do not work well, thus I just omit last due for simplicity
@@ -196,32 +193,21 @@ Hs_struct.signals.values=yy';
 
 %Internal gains
 Hgenperson=50/10^3/3600; %50g per hour per person
-% sig_Hgen=0/10^3/3600;%20/10^3/3600
-sig_Hgen=0;
-
+sig_Hgen=2/10^3/3600;%20/10^3/3600
 npattern=24*7;
 simulation_weeks=ceil(simulation_days/7);
-Hgens_pattern=Npeoplemax/2*[0,0,0,0,0,0,0,0,1,1.1,1.5,1.9,1.96,2,2,2,2,1.96,1.9,1.5,1.1,0,0,0,...
+Hgens_pattern=[0,0,0,0,0,0,0,0,1,1.1,1.5,1.9,1.96,2,2,2,2,1.96,1.9,1.5,1.1,0,0,0,...
              0,0,0,0,0,0,0,0,1,1.1,1.5,1.9,1.96,2,2,2,2,1.96,1.9,1.5,1.1,0,0,0,...
              0,0,0,0,0,0,0,0,1,1.1,1.5,1.9,1.96,2,2,2,2,1.96,1.9,1.5,1.1,0,0,0,...
              0,0,0,0,0,0,0,0,1,1.1,1.5,1.9,1.96,2,2,2,2,1.96,1.9,1.5,1.1,0,0,0,...
              0,0,0,0,0,0,0,0,1,1.1,1.5,1.9,1.96,2,2,2,2,1.96,1.9,1.5,1.1,0,0,0,...
              0,0,0,0,0,0,0,0,0.7,0.9,1.1,1.2,1.0,0.8,0.7,0.5,0.2,0,0,0,0,0,0,0,...
-             0,0,0,0,0,0,0,0,0.7,0.9,1.1,1.2,1.0,0.8,0.7,0.5,0.2,0,0,0,0,0,0,0]*Hgenperson;
-% Hgens=repmat(Hgens_pattern,nzones,simulation_weeks);
-% Hgens_wprev=max(Hgens+sig_Hgen*randn(nzones,npattern*simulation_weeks) ,0);
-% Hgens_w=[];
-% for i=1:nzones
-%     Hgens_w=[Hgens_w;max(interp(Hgens_wprev(i,:),3600/sampling_time),0)];
-% end
-
-Hgens=[];
+             0,0,0,0,0,0,0,0,0.7,0.9,1.1,1.2,1.0,0.8,0.7,0.5,0.2,0,0,0,0,0,0,0]*Hgenperson*2;
+Hgens=repmat(Hgens_pattern,nzones,simulation_weeks);
+Hgens_wprev=max(Hgens+sig_Hgen*randn(nzones,npattern*simulation_weeks) ,0);
 Hgens_w=[];
 for i=1:nzones
-    Hgen=repmat(Hgens_pattern*(ar+(i-1)*br),1,simulation_weeks);
-    Hgens=[Hgens;Hgen];
-    Hgens_wprev=max(Hgen+sig_Hgen*randn(1,npattern*simulation_weeks) ,0);
-    Hgens_w=[Hgens_w;max(interp(Hgens_wprev,3600/sampling_time),0)];
+    Hgens_w=[Hgens_w;max(interp(Hgens_wprev(i,:),3600/sampling_time),0)];
 end
 
 
@@ -239,4 +225,3 @@ yy=spline(times,w_seq,sample_times);
 Hw_struct.signals.dimensions=nzones;
 Hw_struct.time=sample_times';
 Hw_struct.signals.values=yy';
-

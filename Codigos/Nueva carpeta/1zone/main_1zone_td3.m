@@ -1,22 +1,21 @@
 %& Clearing the workspace
 clear all
 % Set to true, to resume training from a saved agent
-resumeTraining = false;
+resumeTraining = true;
 save_agent = true;
 use_parallel = true;
 
 %device for critic & actor
-device = "gpu";
+device = "cpu";
 %Save & Load options
-save_agent_name = "train_agent_td3.mat";
-load_agent_name = "train_agent_td3_tch2.mat";
+save_agent_name = "train_agent_td3_tch5.mat";
+load_agent_name = "train_agent_td3_tch3.mat";
 %folder where to load/save agents and models.
-subcarpeta = "1v/";
-%
-numObservations = 4;
-numActions = 1;
-limit_act_low = 0;
-limit_act_h = 5;
+subcarpeta = "4v/";
+numObservations = 11;
+numActions = 4;
+limit_act_low = [0; -30 ;0 ; 0];
+limit_act_h = [5; 0 ;8 ;0.9];
 obs_low = -40;
 obs_high = 1e7;
 scale = limit_act_low + limit_act_h;
@@ -24,30 +23,37 @@ scale = limit_act_low + limit_act_h;
 low = 22; %temperatura minima
 high = 25; % temperatura máxima
 CO2_max = 1200*1e-6;
-beta = 0.15;% Peso de la energía en el reward
+beta = 0.1;% Peso de la energía en el reward
 %Sample Time & Simulation Time
 Ts = 60*1; %2 min - HVAC System sample Time
 Ts2 = 60*10; %n min - Neural network Sample time
-Tf = 3600*6; % n horas  - Simulation Time
-maxepisodes = 4000;% max number of episodes to stop learning
-StopReward = 20; %Episode reward to stop learning
+Tf = 3600*48; % n horas  - Simulation Time
+maxepisodes = 30000;% max number of episodes to stop learning
+StopReward = -100; %Episode reward to stop learning
 maxsteps = ceil(Tf/Ts2); % Cantidad de pasos en un episodio
+%Noise options
+standard_deviation = [0.5 ;0.1*sqrt(Ts2); 0.6 ; 0.1]/sqrt(Ts2);
+min_std_dv = [0.015; 0.3; 0.02 ;0.05]/sqrt(Ts2);
+decay_rate = 5e-8;
 %RL Layers
 criticlayers = [2,1];
-criticNeurons = [128, 128, 128];
+criticNeurons = [400, 300, 300];
 actorlayers = 2;
-actorNeurons = [128, 128];
+actorNeurons = [400, 300];
 
 
 
 %% Load and open the system in simulink
-mdl = subcarpeta + "hvac_1zone_v3";
+%mdl = subcarpeta + "hvac_1zone_v3";
+mdl = subcarpeta + "hvac_1zone_TCH";
 %open_system(mdl)
 
 %% Define model parameters
-load('values1z.mat');
+%load('values1z.mat'); % Uncomennt this por T params
+%load('values1z_co2.mat'); % Uncomment this for TC params
+load('values1z_tch.mat'); % uncomment this for TCH (temp, co2, hum) params
 params = params1;
-
+Hs_struct.signals.values = Hs_struct.signals.values*0.6;
 
 %% Reinforcement learning
 %Se definen las observaciones, rlNumericSpec es para observaciones de
@@ -58,7 +64,7 @@ params = params1;
 %Esta función es útil cuando se quiere usar distintas condiciones iniciales
 %en cada inicio de un episodio.
 %ci = [28 , 34 , 1500];
-env.ResetFcn = @(in) localResetFcn(in);
+env.ResetFcn = @(in) localResetFcn3(in);
 %Set random seed.
 rng(0)
 %Opciones del agente
@@ -79,9 +85,9 @@ agentOpts = rlTD3AgentOptions(...
 
 agentOpts.ExplorationModel = rl.option.OrnsteinUhlenbeckActionNoise;
 agentOpts.ExplorationModel.MeanAttractionConstant = 0.2/Ts2;
-agentOpts.ExplorationModel.StandardDeviation = 0.5/sqrt(Ts2); %;0.2*sqrt(Ts2)]/sqrt(Ts2);
-agentOpts.ExplorationModel.StandardDeviationDecayRate = 5e-4;% 5e-5];
-agentOpts.ExplorationModel.StandardDeviationMin = 0.015/sqrt(Ts2);% 0.001]/sqrt(Ts2);
+agentOpts.ExplorationModel.StandardDeviation = standard_deviation;%[0.5 ;0.1*sqrt(Ts2)  ; 0.1]/sqrt(Ts2);
+agentOpts.ExplorationModel.StandardDeviationDecayRate = decay_rate;%[4e-7; 5e-7 ;1e-7];
+agentOpts.ExplorationModel.StandardDeviationMin = min_std_dv;%[0.015; 0.1 ;0.05]/sqrt(Ts2);
 
 
 % Train the agent
@@ -90,10 +96,10 @@ agentOpts.ResetExperienceBufferBeforeTraining = ~(resumeTraining);
 
 if resumeTraining
     load(subcarpeta + load_agent_name);
-    agent.AgentOptions.TargetPolicySmoothModel.StandardDeviationDecayRate = 1e-5;
-    agent.AgentOptions.ExplorationModel.StandardDeviation = [0.5; 1; 0.7 ; 0.1 ]/sqrt(Ts2);
-    agent.AgentOptions.ExplorationModel.StandardDeviationMin = [0.005; 0.007; 0.007 ; 0.05 ]/sqrt(Ts2);
-    agent.AgentOptions.ExplorationModel.StandardDeviationDecayRate = 1e-5;
+    agent.AgentOptions.TargetPolicySmoothModel.StandardDeviationDecayRate = 1e-4;
+    agent.AgentOptions.ExplorationModel.StandardDeviationMin = min_std_dv/3;
+    agent.AgentOptions.ExplorationModel.StandardDeviation = min_std_dv;
+    agent.AgentOptions.ExplorationModel.StandardDeviationDecayRate = 1e-7;
 
 else
     %Red neuronal Critico

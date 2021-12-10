@@ -30,7 +30,7 @@ T=x;
 Tr=T(1);
 %disp(delta*Tr + (1-delta)*Toa + DT)
 Ts1 = delta*Tr+(1-delta)*Toa+DT;
-Ts=delta*Tr+(1-delta)*Toa+DT+DTH;
+Ts=delta*Tr+(1-delta)*Toa + DT + DTH;
 COs = delta*T(3) + (1-delta)*CO2amb;
 %based on this code
 % http://woodshole.er.usgs.gov/operations/sea-mat/air_sea-html/qsat.html
@@ -47,25 +47,27 @@ dT(2)=T(2)+ST*(T(1)-T(2))/(R*C2);
 CO2dif = T(3) + ST/(Vol*rhoair)*ms*(COs - T(3));
 %+ aux;
 
-if CO2dif < 0
-    dT(3) = min(T(3),COs) + (ST/(Vol*rhoair)*CO2gen/(Vol));
+if CO2dif < COs
+    dT(3) = COs + ((ST*CO2gen)/(Vol*Vol*rhoair));
 else
     dT(3) = T(3) + ST/(Vol*rhoair)* (ms*(COs - T(3)) + CO2gen/(Vol));
 end
-if T(3)<=0 || dT(3)<=0
-    dT(3) = 0;
-end
+%if T(3)<=0 || dT(3)<=0
+%    dT(3) = 0;
+%end
 
+ew2 = 6.1121*(1.0007+3.46e-6*Pa).*exp((17.502*dT(1))./(240.97+dT(1))); % in mb
+Hsat_room  = 0.62197*(ew2./(Pa-0.378*ew2));
 
 hum_min = min(T(4),Hums);
 dT(4) = T(4) + (ST*ms*(Hums-T(4))+ Humgen/(rhoair*Vol))/(rhoair*Vol);
 if T(4)+ ST*ms*(Hums-T(4))/(rhoair*Vol) < hum_min
     dT(4) = hum_min + Humgen/(rhoair*Vol);
 end
-if T(4)<=0 && dT(4)<=0
-    dT(4)=0;
-end
-dT(5) =  Hsat_Tchilled;
+
+
+dT(5) =  dT(4)/Hsat_room;
+
 
 end
 
