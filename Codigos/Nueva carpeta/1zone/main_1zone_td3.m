@@ -8,7 +8,7 @@ use_parallel = true;
 %device for critic & actor
 device = "cpu";
 %Save & Load options
-save_agent_name = "train_agent_td3_tch5.mat";
+save_agent_name = "train_agent_td3_tch7.mat";
 load_agent_name = "train_agent_td3_tch3.mat";
 %folder where to load/save agents and models.
 subcarpeta = "4v/";
@@ -28,13 +28,13 @@ beta = 0.1;% Peso de la energía en el reward
 Ts = 60*1; %2 min - HVAC System sample Time
 Ts2 = 60*10; %n min - Neural network Sample time
 Tf = 3600*48; % n horas  - Simulation Time
-maxepisodes = 30000;% max number of episodes to stop learning
+maxepisodes = 1500;% max number of episodes to stop learning
 StopReward = -100; %Episode reward to stop learning
 maxsteps = ceil(Tf/Ts2); % Cantidad de pasos en un episodio
 %Noise options
 standard_deviation = [0.5 ;0.1*sqrt(Ts2); 0.6 ; 0.1]/sqrt(Ts2);
-min_std_dv = [0.015; 0.3; 0.02 ;0.05]/sqrt(Ts2);
-decay_rate = 5e-8;
+min_std_dv = [0.015/6; 0.3/8; 0.02/8 ;0.05]/(sqrt(Ts2));
+decay_rate = 8e-8;
 %RL Layers
 criticlayers = [2,1];
 criticNeurons = [400, 300, 300];
