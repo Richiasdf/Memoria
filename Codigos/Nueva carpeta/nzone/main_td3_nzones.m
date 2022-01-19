@@ -3,18 +3,18 @@ clear all
 % Set to true, to resume training from a saved agent
 resumeTraining = false;
 save_agent = false;
-use_parallel = 0;
+use_parallel = 1;
 
 %device for critic & actor
 device = "cpu";
 %Save & Load options
-save_agent_name = "train_agent_td3_tch_variabledays3.mat";
+save_agent_name = "train_agent_td3.mat";
 load_agent_name = "train_agent_td3_tch_variabledays.mat";
 %folder where to load/save agents and models.
 subcarpeta = "";
 numObservations = 5*4 + 15 ;%5 states per zone(T_air, T_solid, CO2, hum_rel, hum_abs)
 numActions = 2 + 4 + 4;
-limit_act_low = [0; 0; 0; 0; -30 ; 0; 0; 0; 0; 0];
+limit_act_low = [0.001; 0.001; 0.001; 0.001; -30 ; 0; 0; 0; 0; 0];
 limit_act_h = [5; 5; 5; 5; 0 ; 8; 8; 8; 8 ;0.9];
 obs_low = -40;
 obs_high = 1e7;
@@ -33,9 +33,9 @@ StopReward = 2; %Episode reward to stop learning
 maxsteps = ceil(Tf/Ts2); % Cantidad de pasos en un episodio
 %Noise options
 standard_deviation = [0.5 ;0.5 ;0.5 ;0.5 ;0.1*sqrt(Ts2); 0.6;0.6;0.6;0.6; 0.1]/sqrt(Ts2);
-%min_std_dv = [0.015/1.5; 0.5/1.5; 0.02/1.5 ;0.03/1.5]/(sqrt(Ts2));
-min_std_dv = 0;
-decay_rate = 1e-5; 
+min_std_dv = [0.015/1.5; 0.015/1.5; 0.015/1.5; 0.015/1.5; 0.5/1.5; 0.02/1.5; 0.02/1.5; 0.02/1.5; 0.02/1.5; 0.03/1.5]/(sqrt(Ts2));
+%min_std_dv = 0;
+decay_rate = 1.2e-5; 
 %RL Layers
 criticlayers = [2,1];
 criticNeurons = [400, 300, 300];

@@ -59,28 +59,22 @@ if sum(ms) == 0
     TrCO2 = 0;
     Trhum = 0;
 else
-    Tr=(ms'.*T(1:nz))/sum(ms);
-    TrCO2=(ms'.*CO2)/sum(ms);
-    Trhum=(ms'.*hum)/sum(ms);
+    aux = (ms.*T(1:nz));
+    Tr=(sum(aux))/sum(ms);
+    aux = (ms.*CO2);
+    TrCO2=(sum(aux))/sum(ms);
+    aux = (ms.*hum);
+    Trhum=(sum(aux))/sum(ms);
 end
 
 
 for i=1:nz
-    if Tr == 0
-        Ts1(i,1)=delta*Tr(1)+(1-delta)*Toa+DTc;
-        Ts(i,1)=delta*Tr(1)+(1-delta)*Toa+DTc+DTH(i);
-        CO2s(i,1)=delta*TrCO2(1)+(1-delta)*CO2amb;
-        ew = 6.1121*(1.0007+3.46e-6*Pa).*exp((17.502*Ts1(i))./(240.97+Ts1(i)));
-        Hsat_Tchilled  = 0.62197*(ew./(Pa-0.378*ew));
-        Hums(i,1) = min( delta*Trhum(1) + (1-delta)*Humamb, Hsat_Tchilled);
-    else
-        Ts1(i,1)=delta*Tr(1,i)+(1-delta)*Toa+DTc;
-        Ts(i,1)=delta*Tr(1,i)+(1-delta)*Toa+DTc+DTH(i);
-        CO2s(i,1)=delta*TrCO2(1,i)+(1-delta)*CO2amb;
-        ew = 6.1121*(1.0007+3.46e-6*Pa).*exp((17.502*Ts1(i))./(240.97+Ts1(i)));
-        Hsat_Tchilled  = 0.62197*(ew./(Pa-0.378*ew));
-        Hums(i,1) = min( delta*Trhum(1,i) + (1-delta)*Humamb, Hsat_Tchilled);
-    end
+    Ts1(i,1)=delta*Tr+(1-delta)*Toa+DTc;
+    Ts(i,1)=delta*Tr+(1-delta)*Toa+DTc+DTH(i);
+    CO2s(i,1)=delta*TrCO2+(1-delta)*CO2amb;
+    ew = 6.1121*(1.0007+3.46e-6*Pa).*exp((17.502*Ts1(i,1))./(240.97+Ts1(i,1)));
+    Hsat_Tchilled  = 0.62197*(ew./(Pa-0.378*ew));
+    Hums(i,1) = min( delta*Trhum + (1-delta)*Humamb, Hsat_Tchilled);
 end
 
 %based on this code
@@ -109,28 +103,28 @@ for i=1:nz
     
     CO2dif = CO2(i) + ST/(Vol(i)*rhoair)*ms(i)*(CO2s(i,1) - CO2(i));
     if CO2dif < CO2s(i,1)
-        dCO2(i,1) = CO2s(i,1) + ((ST*CO2gen(i))/Vol(i)*rhoair);
+        dCO2(i,1) = CO2s(i,1) + ((ST*CO2gen(i))/Vol(i)*Vol(i)*rhoair);
     else
-        dCO2(i,1) = CO2(i) + ST/(Vol(i)*rhoair)* (ms(i)*(CO2s(i,1) - CO2(i)) + CO2gen(i));
+        dCO2(i,1) = CO2(i) + ST/(Vol(i)*rhoair)* (ms(i)*(CO2s(i,1) - CO2(i)) + CO2gen(i)/Vol(i));
     end
     
     %%%%%%%%% 
-    dCO2(i,1)=ms(i)*(CO2s(i,1)-CO2(i))/(rhoair*Vol(i))+CO2gen(i)/Vol(i);
-    if CO2(i)<=0 && dCO2(i,1)<=0
-        dCO2(i,1)=0;
-    end
+    %dCO2(i,1)=ms(i)*(CO2s(i,1)-CO2(i))/(rhoair*Vol(i))+CO2gen(i)/Vol(i);
+    %if CO2(i)<=0 && dCO2(i,1)<=0
+    %    dCO2(i,1)=0;
+    %end
     
-    dHum(i,1)=(ms(i)*(Hums(i,1)-hum(i))+Humgen(i))/(rhoair*Vol(i));
-    if hum(i)<=0 && dHum(i,1)<=0
-        dHum(i,1)=0;
-    end
+    %dHum(i,1)=(ms(i)*(Hums(i,1)-hum(i))+Humgen(i))/(rhoair*Vol(i));
+    %if hum(i)<=0 && dHum(i,1)<=0
+    %    dHum(i,1)=0;
+    %end
     
-    ew2 = 6.1121*(1.0007+3.46e-6*Pa).*exp((17.502*dT(i))./(240.97+dT(i))); % in mb
+    ew2 = 6.1121*(1.0007+3.46e-6*Pa).*exp((17.502*dT(i,1))./(240.97+dT(i,1))); % in mb
     Hsat_room  = 0.62197*(ew2./(Pa-0.378*ew2));
 
     hum_min = min(hum(i),Hums(i,1));
     dHum(i,1) = hum(i) + (ST*ms(i)*(Hums(i,1)-hum(i))+ Humgen(i)/(rhoair*Vol(i)))/(rhoair*Vol(i));
-    if hum(i)+ ST*ms(i)*(Hums(i,1)-hum(i))/(rhoair*Vol(i)) < hum_min
+    if hum(i)+ ST*ms(i)*(Hums(i,1)-hum(i))/(rhoair*Vol(i)) <= hum_min
         dHum(i,1) = hum_min + Humgen(i)/(rhoair*Vol(i));
     end
     if dHum(i,1) > Hsat_room
