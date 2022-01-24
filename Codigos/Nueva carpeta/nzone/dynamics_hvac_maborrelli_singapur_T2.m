@@ -15,6 +15,7 @@ rhoair = params.rhoair;
 %disturbances
 
 %temp ambiente
+
 Toa = u(1);
 %calor generado por objetos interiores y personas
 Pd = u(2:nz+1);
@@ -71,14 +72,11 @@ for i=1:nz
     %Air temperature
     dT(i,1) = T(i) + (ST*ms_i(i)*cp*(Ts(i,1)-T(i))+ST*(T(nz+i)-T(i))/R(i)+...
         ST*(Toa-T(i))/Roa(i)+ST*Pd(i)+ST*dtn)/C1(i);
+    
     %Solids temperature
-    dT(i+nz,1)=T(i+nz)+ ST*(T(i)-T(i+nz))/(R(i)*C2(i));
-
-  
-
+    dT(i+nz,1)=T(i+nz)+ ST*(T(i)-T(i+nz))/(R(i)*C2(i));  
     
 end
-
 dx=dT;
 end
 
