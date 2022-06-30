@@ -2,8 +2,8 @@ function [obsInfo,actInfo,env] = makeenv(mdl,obs,acts,low,upp,obs_low,obs_h)
     sub = (split(mdl,"/"));
     if length(sub) > 1
         mdl2=sub(2);
-        sub = sub(1);
-        cd(sub)
+        sub1 = sub(1);
+        cd(sub1)
     else
         mdl2 = mdl;
     end

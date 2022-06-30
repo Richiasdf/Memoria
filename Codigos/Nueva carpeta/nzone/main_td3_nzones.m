@@ -1,21 +1,20 @@
 %& Clearing the workspace
 clear all
 % Set to true, to resume training from a saved agent
-resumeTraining = false;
-save_agent = false;
+resumeTraining = 0;
+save_agent = 1;
 use_parallel = 1;
-
 %device for critic & actor
 device = "cpu";
 %Save & Load options
-save_agent_name = "train_agent_td3.mat";
-load_agent_name = "train_agent_td3_tch_variabledays.mat";
+save_agent_name = "train_agent_td3_rare6.mat";
+load_agent_name = "train_agent_td3_rare3.mat";
 %folder where to load/save agents and models.
-subcarpeta = "";
-numObservations = 5*4 + 15 ;%5 states per zone(T_air, T_solid, CO2, hum_rel, hum_abs)
-numActions = 2 + 4 + 4;
-limit_act_low = [0.001; 0.001; 0.001; 0.001; -30 ; 0; 0; 0; 0; 0];
-limit_act_h = [5; 5; 5; 5; 0 ; 8; 8; 8; 8 ;0.9];
+subcarpeta = "Temperature/";
+numActions = 2 + 5 + 4;
+numObservations = 2*4 + 5*1;%5 states per zone(T_air, T_solid, CO2, hum_rel, hum_abs)
+limit_act_low = [0; 0; 0; 0;0 ; -30 ; 0; 0; 0; 0; 0];
+limit_act_h = [5; 1; 1; 1; 1; 0; 8; 8; 8; 8;0.9];
 obs_low = -40;
 obs_high = 1e7;
 scale = limit_act_low + limit_act_h;
@@ -28,14 +27,14 @@ beta = 0.15;% Peso de la energía en el reward
 Ts = 60*1; %2 min - HVAC System sample Time
 Ts2 = 60*10; %n min - Neural network Sample time
 Tf = 3600*48; % n horas  - Simulation Time
-maxepisodes = 3000;% max number of episodes to stop learning
+maxepisodes = 5000;% max number of episodes to stop learning
 StopReward = 2; %Episode reward to stop learning
 maxsteps = ceil(Tf/Ts2); % Cantidad de pasos en un episodio
 %Noise options
-standard_deviation = [0.5 ;0.5 ;0.5 ;0.5 ;0.1*sqrt(Ts2); 0.6;0.6;0.6;0.6; 0.1]/sqrt(Ts2);
-min_std_dv = [0.015/1.5; 0.015/1.5; 0.015/1.5; 0.015/1.5; 0.5/1.5; 0.02/1.5; 0.02/1.5; 0.02/1.5; 0.02/1.5; 0.03/1.5]/(sqrt(Ts2));
-%min_std_dv = 0;
-decay_rate = 1.2e-5; 
+standard_deviation = [0.3 ;0.1 ;0.1 ;0.1; 0.1 ;0.1*sqrt(Ts2); 0.6;0.6;0.6;0.6; 0.1]/sqrt(Ts2);
+min_std_dv = [0.015; 0.01/1.5; 0.01/1.5; 0.01/1.5; 0.01/1.5; 0.5/1.5; 0.02/1.5; 0.02/1.5; 0.02/1.5; 0.02/1.5; 0.03/1.5]/(sqrt(Ts2));
+%min_std_dv = [0.015; 0.0; 0.0; 0.0; 0.0; 0.2/1.5; 0.01/1.5; 0.01/1.5; 0.01/1.5; 0.01/1.5; 0.01/1.5]/(sqrt(Ts2));
+decay_rate = [1e-5; 3e-5; 3e-5; 3e-5; 3e-5; 1.8e-5; 2e-5; 2e-5; 2e-5; 2e-5; 2e-5];
 %RL Layers
 criticlayers = [2,1];
 criticNeurons = [400, 300, 300];
@@ -46,7 +45,7 @@ actorNeurons = [400, 300];
 
 %% Load and open the system in simulink
 %blk = "hvac_1zone_v3";
-blk = "hvac_maborrelli_singapur_nzones_TCH";
+blk = "hvac_maborrelli_singapur_nzones_T";
 mdl = subcarpeta + blk;
 %open_system(mdl)
 
@@ -65,7 +64,7 @@ params = params1;
 %Función para reiniciar el sistema
 %Esta función es útil cuando se quiere usar distintas condiciones iniciales
 %en cada inicio de un episodio.
-env.ResetFcn = @(in) localResetFcn(in, blk, T_s,H_sup,Hs_struct);
+env.ResetFcn = @(in) localResetFcnT(in, blk, T_s,H_sup,Hs_struct);
 %Set random seed.
 rng(0)
 %Opciones del agente
@@ -73,9 +72,9 @@ agentOpts = rlTD3AgentOptions(...
     'SampleTime',Ts2,...
     'TargetSmoothFactor',1e-3,...
     'DiscountFactor',0.95, ...
-    'MiniBatchSize',256, ...
+    'MiniBatchSize',128, ...
     'SaveExperienceBufferWithAgent',true, ...
-    'ExperienceBufferLength',7e4); 
+    'ExperienceBufferLength',2e5); 
     
 %Opciones del ruido aplicado a las acciones tomadas, si se tiene más de una
 %acción, y estas no se encuentran en rangos similares, se recomienda
@@ -97,10 +96,10 @@ agentOpts.ResetExperienceBufferBeforeTraining = ~(resumeTraining);
 
 if resumeTraining
     load(subcarpeta + load_agent_name);
-    agent.AgentOptions.TargetPolicySmoothModel.StandardDeviationDecayRate = 1e-4;
+    agent.AgentOptions.TargetPolicySmoothModel.StandardDeviationDecayRate = 1e-7;
     agent.AgentOptions.ExplorationModel.StandardDeviationMin = min_std_dv/3;
-    agent.AgentOptions.ExplorationModel.StandardDeviation = min_std_dv;
-    agent.AgentOptions.ExplorationModel.StandardDeviationDecayRate = 1e-7;
+    agent.AgentOptions.ExplorationModel.StandardDeviation = min_std_dv*3;
+    agent.AgentOptions.ExplorationModel.StandardDeviationDecayRate = 2e-5;
 
 else
     %Red neuronal Critico
