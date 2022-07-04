@@ -1,15 +1,15 @@
 %& Clearing the workspace
 clear all
 % Set to true, to resume training from a saved agent
-resumeTraining = true;
-save_agent = true;
-use_parallel = true;
+resumeTraining = false;
+save_agent = 1;
+use_parallel = 1;
 
 %device for critic & actor
 device = "cpu";
 %Save & Load options
-save_agent_name = "train_agent_td3_tch7.mat";
-load_agent_name = "train_agent_td3_tch3.mat";
+save_agent_name = "train_agent_td3_tch_variabledays6.mat";
+load_agent_name = "train_agent_td3_tch_variabledays.mat";
 %folder where to load/save agents and models.
 subcarpeta = "4v/";
 numObservations = 11;
@@ -23,18 +23,19 @@ scale = limit_act_low + limit_act_h;
 low = 22; %temperatura minima
 high = 25; % temperatura máxima
 CO2_max = 1200*1e-6;
-beta = 0.1;% Peso de la energía en el reward
+beta = 0.15;% Peso de la energía en el reward
 %Sample Time & Simulation Time
 Ts = 60*1; %2 min - HVAC System sample Time
 Ts2 = 60*10; %n min - Neural network Sample time
 Tf = 3600*48; % n horas  - Simulation Time
-maxepisodes = 1500;% max number of episodes to stop learning
-StopReward = -100; %Episode reward to stop learning
+maxepisodes = 3000;% max number of episodes to stop learning
+StopReward = 2; %Episode reward to stop learning
 maxsteps = ceil(Tf/Ts2); % Cantidad de pasos en un episodio
 %Noise options
-standard_deviation = [0.5 ;0.1*sqrt(Ts2); 0.6 ; 0.1]/sqrt(Ts2);
-min_std_dv = [0.015/6; 0.3/8; 0.02/8 ;0.05]/(sqrt(Ts2));
-decay_rate = 8e-8;
+standard_deviation = [0.5 ;0.2*sqrt(Ts2); 0.6 ; 0.1]/sqrt(Ts2);
+min_std_dv = [0; 0.3; 0 ;0]/(sqrt(Ts2));
+%min_std_dv = 0;
+decay_rate = [2e-5;9e-6 ;2e-5 ;2e-5]; 
 %RL Layers
 criticlayers = [2,1];
 criticNeurons = [400, 300, 300];
@@ -44,8 +45,9 @@ actorNeurons = [400, 300];
 
 
 %% Load and open the system in simulink
-%mdl = subcarpeta + "hvac_1zone_v3";
-mdl = subcarpeta + "hvac_1zone_TCH";
+%blk = "hvac_1zone_v3";
+blk = "hvac_1zone_TCH";
+mdl = subcarpeta + blk;
 %open_system(mdl)
 
 %% Define model parameters
@@ -53,7 +55,7 @@ mdl = subcarpeta + "hvac_1zone_TCH";
 %load('values1z_co2.mat'); % Uncomment this for TC params
 load('values1z_tch.mat'); % uncomment this for TCH (temp, co2, hum) params
 params = params1;
-Hs_struct.signals.values = Hs_struct.signals.values*0.6;
+%Hs_struct.signals.values = Hs_struct.signals.values*0.6;
 
 %% Reinforcement learning
 %Se definen las observaciones, rlNumericSpec es para observaciones de
@@ -63,8 +65,7 @@ Hs_struct.signals.values = Hs_struct.signals.values*0.6;
 %Función para reiniciar el sistema
 %Esta función es útil cuando se quiere usar distintas condiciones iniciales
 %en cada inicio de un episodio.
-%ci = [28 , 34 , 1500];
-env.ResetFcn = @(in) localResetFcn3(in);
+env.ResetFcn = @(in) localResetFcn3(in, blk, T_s,H_sup,Hs_struct);
 %Set random seed.
 rng(0)
 %Opciones del agente
@@ -74,14 +75,14 @@ agentOpts = rlTD3AgentOptions(...
     'DiscountFactor',0.95, ...
     'MiniBatchSize',256, ...
     'SaveExperienceBufferWithAgent',true, ...
-    'ExperienceBufferLength',1e6); 
+    'ExperienceBufferLength',7e4); 
     
 %Opciones del ruido aplicado a las acciones tomadas, si se tiene más de una
 %acción, y estas no se encuentran en rangos similares, se recomienda
 %utilizar un vector en vez de un escalar.
 %agentOpts.TargetPolicySmoothModel.StandardDeviationMin = [0.000001; 0.00001] ;
 %agentOpts.TargetPolicySmoothModel.StandardDeviation = [0.001; 0.03]; % target policy noise
-%agentOpts.TargetPolicySmoothModel.StandardDeviationDecayRate = [1e-3; 1e-3];
+agentOpts.TargetPolicySmoothModel.StandardDeviationDecayRate = 1e-3;
 
 agentOpts.ExplorationModel = rl.option.OrnsteinUhlenbeckActionNoise;
 agentOpts.ExplorationModel.MeanAttractionConstant = 0.2/Ts2;
@@ -110,7 +111,7 @@ else
     critic2 = rlQValueRepresentation(criticNetwork2,obsInfo,actInfo,'Observation',{'State'},'Action',{'Action'},criticOpts);
     %Red neuronal Actor
     actorNetwork = MakeActor(numObservations,numActions, actorlayers , actorNeurons, scale);
-    actorOptions = rlRepresentationOptions('LearnRate',2e-03,'GradientThreshold',.5, 'UseDevice', device);
+    actorOptions = rlRepresentationOptions('LearnRate',1e-03,'GradientThreshold',.5, 'UseDevice', device);
     actor = rlDeterministicActorRepresentation(actorNetwork,obsInfo,actInfo,'Observation',{'State'},'Action',{'Action'},actorOptions);
     % Create a fresh new agent
     %createNetworks

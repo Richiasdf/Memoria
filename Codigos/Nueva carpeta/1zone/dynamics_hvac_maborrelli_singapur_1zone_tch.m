@@ -43,10 +43,9 @@ Hums = min( delta*T(4) + (1-delta)*Humamb, Hsat_Tchilled);
 dT(1)=Tr+(ST*ms*cp*((Ts)-T(1))+ ST*(T(2)-T(1))/R+...
     ST*(Toa-T(1))/Roa+ST*Pd)/C1;
 dT(2)=T(2)+ST*(T(1)-T(2))/(R*C2);
+
 %CO2
 CO2dif = T(3) + ST/(Vol*rhoair)*ms*(COs - T(3));
-%+ aux;
-
 if CO2dif < COs
     dT(3) = COs + ((ST*CO2gen)/(Vol*Vol*rhoair));
 else
@@ -64,7 +63,9 @@ dT(4) = T(4) + (ST*ms*(Hums-T(4))+ Humgen/(rhoair*Vol))/(rhoair*Vol);
 if T(4)+ ST*ms*(Hums-T(4))/(rhoair*Vol) < hum_min
     dT(4) = hum_min + Humgen/(rhoair*Vol);
 end
-
+if dT(4)>Hsat_room
+    dT(4) = Hsat_room;
+end
 
 dT(5) =  dT(4)/Hsat_room;
 

@@ -2,21 +2,23 @@
 clear all
 % Set to true, to resume training from a saved agent
 resumeTraining = false;
-save_agent = true;
-use_parallel = true;
+save_agent = false;
+use_parallel = 1;
 
-%device for critic & actor
-device = "gpu";
+%device for critic & actor, could be cpu or gpu
+device = "cpu";
 %Save & Load options
-save_agent_name = "train_agent_tch3.mat";
-load_agent_name = "train_agent2.mat";
+save_agent_name = "train_agent_tch_adam.mat";
+load_agent_name = "train_agent_tch2.mat";
 %folder where to load/save agents and models.
-subcarpeta = "4v/";
-%
-numObservations = 11;
-numActions = 4;
-limit_act_low = [0; -30 ; 0;  0];
-limit_act_h = [5; 0; 8; 0.9];
+subcarpeta = "3v/";
+%define number of observations and actions and their limits
+num_pred = 7;
+num_disturbances = 2;
+numObservations = 2 +(num_pred*num_disturbances);
+numActions = 3;
+limit_act_low = [0;-30; 0];
+limit_act_h = [5; 0; 0.9];
 obs_low = -40;
 obs_high = 1e7;
 scale = limit_act_low + limit_act_h;
@@ -28,30 +30,37 @@ beta = 0.1;% Peso de la energía en el reward
 %Sample Time & Simulation Time
 Ts = 60*1; %2 min - HVAC System sample Time
 Ts2 = 60*10; %n min - Neural network Sample time
-Tf = 3600*48; % n horas  - Simulation Time
-maxepisodes = 5000;% max number of episodes to stop learning
-StopReward = -100; %Episode reward to stop learning
+Tf = 3600*6; % n horas  - Simulation Time
+maxepisodes = 1000;% max number of episodes to stop learning
+StopReward = -0; %Episode reward to stop learning
 maxsteps = ceil(Tf/Ts2); % Cantidad de pasos en un episodio
+%Noise options
+standard_deviation = [0.5/sqrt(Ts2); 0.3; 0.1/sqrt(Ts2)] ;% ;0.1*sqrt(Ts2); 0.6 ; 0.1]/sqrt(Ts2);
+min_std_dv = [0.015/(sqrt(Ts2)); 0.1; 0.03/(sqrt(Ts2))];% 0.4; 0.03 ;0.05]/(sqrt(Ts2));
+decay_rate = 7e-4;
 %RL Layers
 criticlayers = [2,1];
-criticNeurons = [400, 300, 300];
+criticNeurons = [64, 32, 32];
 actorlayers = 2;
-actorNeurons = [400, 300];
+actorNeurons = [32, 16];
 
 
 
 %% Load and open the system in simulink
-%mdl = subcarpeta + "hvac_1zone_v3";
-mdl = subcarpeta + "hvac_1zone_TCH";
+blk = "hvac_1zone_v3";
+%blk = "hvac_1zone_TCH";
+mdl = subcarpeta + blk;
 %open_system(mdl)
 
 %% Define model parameters
-%load('values1z.mat'); % Uncomennt this por T params
+load('values1z.mat'); % Uncomennt this por T params
 %load('values1z_co2.mat'); % Uncomment this for TC params
-load('values1z_tch.mat'); % uncomment this for TCH (temp, co2, hum) params
+%load('values1z_tch.mat'); % uncomment this for TCH (temp, co2, hum) params
 params = params1;
-Hs_struct.signals.values = Hs_struct.signals.values/2;
+%Hs_struct.signals.values = Hs_struct.signals.values/2;
 
+Ts_pred_struct = Pred(Ts_struct, Ts2, num_pred);
+Pds_struct_pred = Pred(Pds_struct, Ts2, num_pred);
 
 %% Reinforcement learning
 %Se definen las observaciones, rlNumericSpec es para observaciones de
@@ -61,8 +70,9 @@ Hs_struct.signals.values = Hs_struct.signals.values/2;
 %Función para reiniciar el sistema
 %Esta función es útil cuando se quiere usar distintas condiciones iniciales
 %en cada inicio de un episodio.
-%ci = [28 , 34 , 1500];
-env.ResetFcn = @(in) localResetFcn3(in);
+
+%ci = [28 ; 34];
+env.ResetFcn = @(in) localResetFcn(in, blk);%, T_s,H_sup,Hs_struct);
 
 %Set random seed.
 rng(0)
@@ -71,17 +81,17 @@ agentOpts = rlDDPGAgentOptions(...
     'SampleTime',Ts2,...
     'TargetSmoothFactor',1e-3,...
     'DiscountFactor',0.99, ...
-    'MiniBatchSize',256, ...
+    'MiniBatchSize',128, ...
     'SaveExperienceBufferWithAgent',true, ...
-    'ExperienceBufferLength',7e4); 
+    'ExperienceBufferLength',1e6); 
     
 %Opciones del ruido aplicado a las acciones tomadas, si se tiene más de una
 %acción, y estas no se encuentran en rangos similares, se recomienda
 %utilizar un vector en vez de un escalar.
-agentOpts.NoiseOptions.StandardDeviation = [0.5 ;0.1*sqrt(Ts2); 0.6 ; 0.1]/sqrt(Ts2); %;0.3*sqrt(Ts2) ; 0.45 ; 0.1];
-agentOpts.NoiseOptions.StandardDeviationDecayRate = 9e-6;% 5e-7; 3e-7 ;1e-7];
+agentOpts.NoiseOptions.StandardDeviation = standard_deviation; %;0.3*sqrt(Ts2) ; 0.45 ; 0.1];
+agentOpts.NoiseOptions.StandardDeviationDecayRate = decay_rate;% 5e-7; 3e-7 ;1e-7];
 agentOpts.NoiseOptions.MeanAttractionConstant = 0.2/Ts2;
-agentOpts.NoiseOptions.StandardDeviationMin = [0.015/1.5; 0.3/1.5; 0.02/1.5 ;0.05]/(sqrt(Ts2));;% 0.1; 0.03 ;0.05];
+agentOpts.NoiseOptions.StandardDeviationMin = min_std_dv;% 0.1; 0.03 ;0.05];
 
 
 % Set ResetExperienceBufferBeforeTraining to false to keep experience from the previous session
@@ -89,8 +99,8 @@ agentOpts.ResetExperienceBufferBeforeTraining = ~(resumeTraining);
 
 if resumeTraining
     load(subcarpeta+load_agent_name);
-    agent.AgentOptions.NoiseOptions.StandardDeviationMin = [0.01; 0.05; 0.05; 0.01 ]/sqrt(Ts2);
-    agent.AgentOptions.NoiseOptions.StandardDeviation = [0.3; 0.5; 0.4 ; 0.05]/sqrt(Ts2);
+    agent.AgentOptions.NoiseOptions.StandardDeviationMin = min_std_dv/4;
+    agent.AgentOptions.NoiseOptions.StandardDeviation = min_std_dv;
     agent.AgentOptions.NoiseOptions.StandardDeviationDecayRate = 1e-8;
     
 else
@@ -100,7 +110,7 @@ else
     critic = rlQValueRepresentation(criticNetwork,obsInfo,actInfo,'Observation',{'State'},'Action',{'Action'},criticOpts);
     %Red neuronal Actor
     actorNetwork = MakeActor(numObservations,numActions, actorlayers , actorNeurons,scale);
-    actorOptions = rlRepresentationOptions('LearnRate',3e-03,'GradientThreshold',.5, 'UseDevice', device);
+    actorOptions = rlRepresentationOptions('LearnRate',2e-03,'GradientThreshold',.5, 'UseDevice', device);
     actor = rlDeterministicActorRepresentation(actorNetwork,obsInfo,actInfo,'Observation',{'State'},'Action',{'Action'},actorOptions);
     % Create a fresh new agent
     %createNetworks
@@ -116,7 +126,6 @@ trainOpts = rlTrainingOptions(...
     'UseParallel',use_parallel, ...
     'ScoreAveragingWindowLength',50, ...
     'Verbose',true, ...
-    'Plots','none',...
     'StopTrainingCriteria','EpisodeReward',...
     'StopTrainingValue',StopReward);
 
@@ -152,6 +161,19 @@ end
 
 
 %% Funciones a utilizar
+function predictions = Pred(Temp, Ts, step)
+    Ts_pred = zeros((length(Temp.signals)),step);
+    values = [Temp.signals.values; Temp.signals.values];
+    for i=1:(length(Temp.signals.values))
+        for j=0:step-1
+            Ts_pred(i,j+1)=values( i+Ts/60*j);
+        end
+    end
+    Ts_pred_struct.signals.dimensions=step;
+    Ts_pred_struct.signals.values = Ts_pred;
+    Ts_pred_struct.time = Temp.time;
+    predictions = Ts_pred_struct;
+end
 
 function criticNetwork = MakeCritic(obs,acts,layers,neurons)
     statePath = featureInputLayer(obs,'Normalization','none','Name','State');
