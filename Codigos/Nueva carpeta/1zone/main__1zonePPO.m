@@ -3,23 +3,25 @@ clear all
 % Set to true, to resume training from a saved agent
 resumeTraining = false;
 save_agent = true;
-use_parallel = false;
+use_parallel = 0;
 
 %device for critic & actor
 device = "cpu";
 %Save & Load options
-save_agent_name = "train_agent_ppo_tch.mat";
+save_agent_name = "train_agent_ppo_tc.mat";
 load_agent_name = "train_agent2.mat";
 %folder where to load/save agents and models.
 subcarpeta = "4v/";
 %
-numObservations = 11;
+numObservations = 7;
 numActions = 4;
-limit_act_low = [0; -30; 0; 0];
-limit_act_h = [5; 0; 8 ;.9];
 obs_low = -40;
 obs_high = 1e7;
+limit_act_low = [0; -30 ;0 ; 0];
+limit_act_h = [5; 0 ;8 ;0.9];
 scale = limit_act_low + limit_act_h;
+limit_act_low = [0; 0; 0; 0];
+limit_act_h = [1; 1; 1; 1];
 %Range of temperature wanted
 low = 22; %temperatura minima
 high = 25; % temperatura máxima
@@ -29,8 +31,8 @@ beta = 0.1;% Peso de la energía en el reward
 Ts = 60*1; %2 min - HVAC System sample Time
 Ts2 = 60*10; %n min - Neural network Sample time
 Tf = 3600*48; % n horas  - Simulation Time
-maxepisodes = 30000;% max number of episodes to stop learning
-StopReward = 0; %Episode reward to stop learning
+maxepisodes = 3000;% max number of episodes to stop learning
+StopReward = -200; %Episode reward to stop learning
 maxsteps = ceil(Tf/Ts2); % Cantidad de pasos en un episodio
 %RL Layers
 criticlayers = 2;
@@ -41,10 +43,9 @@ actorNeurons = [32, 32];
 
 
 %% Load and open the system in simulink
-blk = "hvac_1zone_TCH_stocastic";
-%blk = "hvac_1zone_v3_stocastic";
+%blk = "hvac_1zone_TCH_stocastic";
+blk = "hvac_1zone_v3_stocastic";
 mdl = subcarpeta + blk;
-%mdl = subcarpeta + "hvac_1zone_TCH";
 %open_system(mdl)
 
 %% Define model parameters
@@ -52,7 +53,7 @@ mdl = subcarpeta + blk;
 %load('values1z_co2.mat'); % Uncomment this for TC params
 load('values1z_tch.mat'); % uncomment this for TCH (temp, co2, hum) params
 params = params1;
-Hs_struct.signals.values = Hs_struct.signals.values/2;
+%Hs_struct.signals.values = Hs_struct.signals.values/2;
 
 
 %% Reinforcement learning
@@ -63,35 +64,32 @@ Hs_struct.signals.values = Hs_struct.signals.values/2;
 %Función para reiniciar el sistema
 %Esta función es útil cuando se quiere usar distintas condiciones iniciales
 %en cada inicio de un episodio.
-%ci = [28 , 34 , 1500];
-env.ResetFcn = @(in) localResetFcn3(in, blk);
+
+env.ResetFcn = @(in) localResetFcn2(in, blk, T_s,H_sup,Hs_struct);
 
 %Set random seed.
 rng(0)
 %Opciones del agente
 agentOpts = rlPPOAgentOptions(...
     'SampleTime',Ts2,...
-    'ClipFactor',0.5,...
+    'ClipFactor',0.2,...
     'DiscountFactor',0.99, ...
-    'MiniBatchSize',maxsteps/2,...
-    'ExperienceHorizon',maxsteps,... 
-    'NumEpoch',2,...
+    'MiniBatchSize',256,...
+    'ExperienceHorizon',280,... 
+    'NumEpoch',10,...
+    'GAEFactor',0.95,...
     'AdvantageEstimateMethod','gae'); 
 
 if resumeTraining
     load(subcarpeta+load_agent_name);
-    agent.AgentOptions.NoiseOptions.StandardDeviationMin = [0.01; 0.05; 0.05; 0.01 ]/sqrt(Ts2);
-    agent.AgentOptions.NoiseOptions.StandardDeviation = [0.3; 0.5; 0.4 ; 0.05]/sqrt(Ts2);
-    agent.AgentOptions.NoiseOptions.StandardDeviationDecayRate = 1e-8;
-    
 else
     %Red neuronal Critico
-    criticOpts = rlRepresentationOptions('LearnRate',1e-03,'GradientThreshold',1, 'UseDevice', device);
+    criticOpts = rlRepresentationOptions('LearnRate',3e-03,'GradientThreshold',1, 'UseDevice', device);
     criticNetwork = MakeCritic(numObservations,numActions,criticlayers,criticNeurons);
     critic = rlValueRepresentation(criticNetwork,obsInfo,'Observation',{'State'},criticOpts);
     %Red neuronal Actor
     actorNetwork = MakeActor(numObservations,numActions, actorlayers , actorNeurons,scale);
-    actorOptions = rlRepresentationOptions('LearnRate',3e-03,'GradientThreshold',1, 'UseDevice', device);
+    actorOptions = rlRepresentationOptions('LearnRate',1e-03,'GradientThreshold',1, 'UseDevice', device);
     actor = rlStochasticActorRepresentation(actorNetwork,obsInfo,actInfo,'Observation',{'State'},actorOptions);
     % Create a fresh new agent
     %createNetworks
@@ -124,7 +122,7 @@ end
 
 %Se comienza a entrenar el agente y se abre el gráfico de entrenamiento.
 %dbstop if naninf
-trainingStats = train(agent,env,trainOpts);
+%trainingStats = train(agent,env,trainOpts);
 
 %Se carga un agente pre entrenado:
 %load(subcarpeta+load_agent_name);
@@ -134,7 +132,7 @@ trainingStats = train(agent,env,trainOpts);
 
 %Se simula el agente entrenado
 
-sim(env,agent,simOpts);
+%sim(env,agent,simOpts);
 
 %Save the train network
 if save_agent
@@ -148,12 +146,12 @@ function statePath = MakeCritic(obs,acts,layers,neurons)
     statePath = featureInputLayer(obs,'Normalization','none','Name','State');
     for i=1:layers(1)
         if mod(i,2) == 0
-            statePath = [statePath; reluLayer('Name','StateTanh'+string(i/2))];
+            statePath = [statePath; reluLayer('Name','State ReLu '+string(i/2))];
         end
         statePath = [statePath; fullyConnectedLayer(neurons(i),'Name','CriticStateFC'+string(i))];
         
     end
-    statePath = [statePath; reluLayer('Name','CommonTanh'); fullyConnectedLayer(1,'Name','CriticOutput')];
+    statePath = [statePath; reluLayer('Name','Common ReLu'); fullyConnectedLayer(1,'Name','CriticOutput')];
 end
 
 function Network0 = MakeActor(obs,acts,layers,neurons,scale)
@@ -164,11 +162,11 @@ function Network0 = MakeActor(obs,acts,layers,neurons,scale)
     for j=1:acts
         Network{j} =[];
         for i=1:layers(1)
-            Network{j} = [Network{j}; fullyConnectedLayer(neurons(i),'Name','ActorFC'+string(j)+string(i)); reluLayer('Name','ActorTanh'+string(j)+string(i/2))];
+            Network{j} = [Network{j}; fullyConnectedLayer(neurons(i),'Name','ActorFC'+string(j)+ ' - ' + string(i)); reluLayer('Name','Actor ReLu '+string(j)+ ' - '+string(i))];
         end
-        Network{j} = [Network{j}  ;fullyConnectedLayer(2,'Name','Action2'+string(j)); softmaxLayer('Name','actionProb'+string(j))];
+        Network{j} = [Network{j} ;fullyConnectedLayer(2,'Name','Action '+string(j)); softmaxLayer('Name','actionProb'+string(j))];
         Network0 = addLayers(Network0,Network{j});
-        Network0 = connectLayers(Network0,'infc','ActorFC'+string(j)+"1");  
+        Network0 = connectLayers(Network0,'infc','ActorFC'+string(j)+" - 1");  
         Network0 = connectLayers(Network0,'actionProb'+string(j),'out/in'+string(j));
     end
     
